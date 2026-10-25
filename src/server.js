@@ -16,7 +16,7 @@ function sameSecret(a, b) {
  * @param {object} helper  ayudante de Windows (send(linea), eventos 'line')
  * @param {(msg:string)=>void} log
  */
-function createServer(config, helper, log = console.log) {
+function createServer(config, helper, log = console.log, { heartbeatMs = 1000, clientTimeoutMs = 10000 } = {}) {
   const cursor = new RemoteCursor({ side: config.macSide, speed: config.mouseSpeed });
   let client = null;       // { send, socket, name }
   let remote = false;      // true mientras el raton controla la Mac
@@ -92,7 +92,11 @@ function createServer(config, helper, log = console.log) {
     socket.setNoDelay(true);
     let me = null;
     const send = jsonChannel(socket, (msg) => {
-      if (msg.t !== 'hello' || me) return;
+      if (me) {
+        me.lastSeen = Date.now();
+        return;
+      }
+      if (msg.t !== 'hello') return;
       if (!sameSecret(msg.password, config.password)) {
         send({ t: 'denied', reason: 'clave incorrecta' });
         log(`Conexion rechazada desde ${socket.remoteAddress}: clave incorrecta.`);
@@ -104,7 +108,7 @@ function createServer(config, helper, log = console.log) {
         log(`Reemplazando la conexion anterior de ${client.name}.${duplicated ? ' Parece que hay dos ControlMause abiertos en esa Mac: deja solo uno.' : ''}`);
         client.socket.destroy();
       }
-      me = { send, socket, name: String(msg.name || 'Mac'), since: Date.now() };
+      me = { send, socket, name: String(msg.name || 'Mac'), since: Date.now(), lastSeen: Date.now(), heartbeat: msg.heartbeat === true };
       client = me;
       cursor.setScreen(Number(msg.width), Number(msg.height));
       send({ t: 'welcome' });
@@ -122,7 +126,16 @@ function createServer(config, helper, log = console.log) {
   });
 
   // Le decimos al ayudante que Node sigue vivo; si se cuelga, suelta el control solo.
-  const ping = setInterval(() => helper.send('PING'), 1000);
+  const ping = setInterval(() => {
+    helper.send('PING');
+    if (!client) return;
+    if (client.heartbeat && Date.now() - client.lastSeen > clientTimeoutMs) {
+      log(`Sin respuesta de ${client.name}: se cierra la conexion.`);
+      client.socket.destroy();
+      return;
+    }
+    client.send({ t: 'ping' });
+  }, heartbeatMs);
   server.on('close', () => clearInterval(ping));
 
   return {

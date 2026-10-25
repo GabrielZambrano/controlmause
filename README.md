@@ -72,6 +72,7 @@ Con esto ControlMause arranca solo al iniciar sesión, en segundo plano y sin ve
 | `macSide` | `"left"` o `"right"`: lado donde está la Mac. |
 | `mouseSpeed` | Velocidad del cursor en la Mac (1 = igual). Prueba 0.6 si va muy rápido. |
 | `scrollSpeed` / `invertScroll` | Velocidad y sentido de la rueda. |
+| `keepMacAwake` | `true` (por defecto): la Mac no entra en reposo sola mientras está conectada a la Windows (la pantalla sí se apaga y se enciende al entrar con el ratón). `false` para que duerma normal. |
 | `modifiers` | A qué tecla de Mac va cada modificador: `ctrl`, `win` y `alt` → `command`, `control` u `option`. |
 
 ## Cómo funciona

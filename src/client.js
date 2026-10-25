@@ -2,16 +2,26 @@
 const net = require('node:net');
 const os = require('node:os');
 const { jsonChannel } = require('./lines');
+const { NO_POWER } = require('./mac-power');
 
 /**
  * @param {object} config
  * @param {object} helper  ayudante de Mac (send(linea), eventos 'line')
  */
-function createClient(config, helper, log = console.log) {
+function createClient(config, helper, log = console.log, { power = NO_POWER, serverTimeoutMs = 5000, retryMs = 2000 } = {}) {
   let screen = null;
   let socket = null;
   let stopped = false;
   let retry = null;
+  let welcomed = false;
+  let lastSeen = 0;
+
+  const watchdog = setInterval(() => {
+    if (!welcomed || Date.now() - lastSeen <= serverTimeoutMs) return;
+    log('Sin respuesta de la Windows: reconectando...');
+    welcomed = false;
+    socket.destroy();
+  }, Math.min(1000, serverTimeoutMs));
 
   const toHelper = (msg) => {
     switch (msg.t) {
@@ -20,8 +30,12 @@ function createClient(config, helper, log = console.log) {
       case 'wheel': helper.send(`WHEEL ${msg.dy} ${msg.dx}`); break;
       case 'key': helper.send(`KEY ${msg.code} ${msg.d ? 'D' : 'U'}`); break;
       case 'leave': helper.send('RESET'); log('<- control devuelto a Windows'); break;
-      case 'enter': log('-> recibiendo el control'); break;
-      case 'welcome': log(`Conectado a ${config.serverHost}:${config.port}.`); break;
+      case 'enter': power.wakeDisplay(); log('-> recibiendo el control'); break;
+      case 'welcome':
+        welcomed = true;
+        power.hold();
+        log(`Conectado a ${config.serverHost}:${config.port}.`);
+        break;
       case 'denied': log(`El servidor rechazo la conexion: ${msg.reason}`); stopped = true; break;
     }
   };
@@ -30,16 +44,22 @@ function createClient(config, helper, log = console.log) {
     if (stopped) return;
     socket = net.connect({ host: config.serverHost, port: config.port });
     socket.setNoDelay(true);
-    const send = jsonChannel(socket, toHelper);
+    const send = jsonChannel(socket, (msg) => {
+      lastSeen = Date.now();
+      if (msg.t === 'ping') send({ t: 'pong' });
+      else toHelper(msg);
+    });
     socket.on('connect', () => {
       socket.setKeepAlive(true, 2000);
-      send({ t: 'hello', password: config.password, name: os.hostname(), width: screen.width, height: screen.height });
+      send({ t: 'hello', password: config.password, name: os.hostname(), width: screen.width, height: screen.height, heartbeat: true });
     });
     socket.on('error', () => {});
     socket.on('close', () => {
+      welcomed = false;
+      power.release();
       helper.send('RESET');
       if (stopped) return;
-      retry = setTimeout(connect, 2000);
+      retry = setTimeout(connect, retryMs);
     });
   };
 
@@ -58,6 +78,8 @@ function createClient(config, helper, log = console.log) {
     stop() {
       stopped = true;
       clearTimeout(retry);
+      clearInterval(watchdog);
+      power.release();
       if (socket) socket.destroy();
     },
   };
@@ -85,7 +107,9 @@ if (require.main === module) {
     .then(() => {
       const helper = startHelper('mac');
       helper.on('exit', (code) => { console.log(`El ayudante de Mac termino (codigo ${code}).`); process.exit(1); });
-      running = { helper, client: createClient(config, helper) };
+      const { createPower } = require('./mac-power');
+      const power = createPower({ keepAwake: config.keepMacAwake !== false });
+      running = { helper, client: createClient(config, helper, console.log, { power }) };
     })
     .catch((err) => {
       console.error(`No se pudo comprobar si hay otro ControlMause abierto: ${err.message}`);

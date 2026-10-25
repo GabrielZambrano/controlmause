@@ -9,6 +9,7 @@ const DEFAULTS = {
   mouseSpeed: 1,
   scrollSpeed: 1,
   invertScroll: false,
+  keepMacAwake: true,
   modifiers: { ctrl: 'command', win: 'control', alt: 'option' },
 };
 
