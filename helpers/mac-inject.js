@@ -137,6 +137,10 @@ function run() {
   }
 
   emit('READY ' + width + ' ' + height);
+  try {
+    ObjC.import('ApplicationServices');
+    if (!$.AXIsProcessTrusted()) emit('NOACCESS');
+  } catch (e) {}
 
   let buf = '';
   for (;;) {

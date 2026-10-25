@@ -8,6 +8,9 @@
   "scripts": {
     "server": "node src/server.js",
     "client": "node src/client.js",
+    "autostart": "node src/autostart/index.js on",
+    "autostart:off": "node src/autostart/index.js off",
+    "autostart:status": "node src/autostart/index.js status",
     "test": "node --test"
   }
 }

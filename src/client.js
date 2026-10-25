@@ -49,6 +49,8 @@ function createClient(config, helper, log = console.log) {
       screen = { width: Number(p[1]), height: Number(p[2]) };
       log(`Pantalla de la Mac: ${screen.width}x${screen.height}. Conectando con ${config.serverHost}...`);
       connect();
+    } else if (p[0] === 'NOACCESS') {
+      log(`Falta el permiso de Accesibilidad: activalo en Ajustes del Sistema > Privacidad y seguridad > Accesibilidad (en segundo plano es para "node": ${process.execPath}).`);
     }
   });
 
@@ -71,10 +73,22 @@ if (require.main === module) {
     console.error('Falta "serverHost" en config.json: pon la IP de la Windows.');
     process.exit(1);
   }
-  const helper = startHelper('mac');
-  helper.on('exit', (code) => { console.log(`El ayudante de Mac termino (codigo ${code}).`); process.exit(1); });
-  const client = createClient(config, helper);
-  const stop = () => { client.stop(); helper.stop(); setTimeout(() => process.exit(0), 200); };
+  const { waitForLock } = require('./single-instance');
+  let running = null;
+  const stop = () => {
+    if (running) { running.client.stop(); running.helper.stop(); }
+    setTimeout(() => process.exit(0), 200);
+  };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
+  waitForLock(config.port + 1, { onBusy: () => console.log('Ya hay otro ControlMause abierto en esta Mac: este espera a que se cierre.') })
+    .then(() => {
+      const helper = startHelper('mac');
+      helper.on('exit', (code) => { console.log(`El ayudante de Mac termino (codigo ${code}).`); process.exit(1); });
+      running = { helper, client: createClient(config, helper) };
+    })
+    .catch((err) => {
+      console.error(`No se pudo comprobar si hay otro ControlMause abierto: ${err.message}`);
+      process.exit(1);
+    });
 }

@@ -46,6 +46,22 @@ Tu configuración:
 - Mientras controlas la Mac, `Ctrl` funciona como `Cmd` (Ctrl+C copia, Ctrl+V pega). Esto se cambia en `"modifiers"`.
 - El teclado funciona por posición física de las teclas. Pon la misma distribución (por ejemplo, Español) en la Mac.
 
+## Inicio automático
+
+Con esto ControlMause arranca solo al iniciar sesión, en segundo plano y sin ventanas. Si se cierra por un error, vuelve a arrancar solo.
+
+| Comando | Qué hace |
+| --- | --- |
+| `npm run autostart` | Activa el inicio automático y lo arranca ya. |
+| `npm run autostart:status` | Dice si está activado y corriendo, y muestra las últimas líneas del registro. |
+| `npm run autostart:off` | Lo desactiva y lo detiene. |
+
+- **Windows:** crea un acceso directo en la carpeta *Inicio* del usuario. Se ve en *Configuración → Aplicaciones → Inicio* como `ControlMause`. El registro queda en `%LOCALAPPDATA%\ControlMause\controlmause.log`.
+- **Mac:** crea un agente de inicio (`~/Library/LaunchAgents/com.controlmause.client.plist`) y copia el programa a `~/Library/Application Support/ControlMause`. El registro queda en `~/Library/Logs/ControlMause/controlmause.log`.
+  - En segundo plano el permiso de **Accesibilidad** es para `node`, no para Terminal. El comando muestra la ruta que hay que agregar.
+  - Como usa una copia, cada vez que cambies `config.json` o hagas `git pull`, vuelve a correr `npm run autostart`.
+- Con el inicio automático activo ya no hace falta `npm run server` ni `npm run client`. Si los corres igual, el servidor avisa que el puerto ya está en uso.
+
 ## Opciones de `config.json`
 
 | Opción | Qué hace |

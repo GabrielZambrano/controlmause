@@ -100,10 +100,11 @@ function createServer(config, helper, log = console.log) {
         return;
       }
       if (client) {
-        log(`Reemplazando la conexion anterior de ${client.name}.`);
+        const duplicated = Date.now() - client.since < 10000;
+        log(`Reemplazando la conexion anterior de ${client.name}.${duplicated ? ' Parece que hay dos ControlMause abiertos en esa Mac: deja solo uno.' : ''}`);
         client.socket.destroy();
       }
-      me = { send, socket, name: String(msg.name || 'Mac') };
+      me = { send, socket, name: String(msg.name || 'Mac'), since: Date.now() };
       client = me;
       cursor.setScreen(Number(msg.width), Number(msg.height));
       send({ t: 'welcome' });
@@ -126,7 +127,13 @@ function createServer(config, helper, log = console.log) {
 
   return {
     server,
-    listen: (port = config.port, host) => new Promise((resolve) => server.listen(port, host, () => resolve(server.address().port))),
+    listen: (port = config.port, host) => new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, () => {
+        server.off('error', reject);
+        resolve(server.address().port);
+      });
+    }),
     close: () => new Promise((resolve) => { clearInterval(ping); if (client) client.socket.destroy(); server.close(resolve); }),
     get remote() { return remote; },
   };
@@ -149,6 +156,12 @@ if (require.main === module) {
     console.log(`ControlMause servidor escuchando en el puerto ${port}.`);
     console.log(`En la Mac, pon "serverHost" con una de estas IP: ${ips.join(', ') || '(sin red)'}`);
     console.log('Atajo de emergencia para volver a Windows: Ctrl+Alt+F12.');
+  }).catch((err) => {
+    console.error(err.code === 'EADDRINUSE'
+      ? `El puerto ${config.port} ya esta en uso: ControlMause ya esta corriendo (revisa "npm run autostart:status").`
+      : `No se pudo abrir el puerto ${config.port}: ${err.message}`);
+    helper.stop();
+    process.exit(1);
   });
   const stop = () => { helper.stop(); app.close().then(() => process.exit(0)); };
   process.on('SIGINT', stop);
