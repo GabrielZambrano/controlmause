@@ -1,0 +1,10 @@
+{
+  "password": "cambia-esta-clave",
+  "serverHost": "192.168.1.50",
+  "port": 24810,
+  "macSide": "left",
+  "mouseSpeed": 1,
+  "scrollSpeed": 1,
+  "invertScroll": false,
+  "modifiers": { "ctrl": "command", "win": "control", "alt": "option" }
+}

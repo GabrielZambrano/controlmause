@@ -1,0 +1,13 @@
+{
+  "name": "controlmause",
+  "version": "0.1.0",
+  "description": "Un teclado y un raton para tu Windows y tu Mac (reemplazo de ShareMouse).",
+  "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "server": "node src/server.js",
+    "client": "node src/client.js",
+    "test": "node --test"
+  }
+}
