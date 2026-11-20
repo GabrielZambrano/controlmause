@@ -11,8 +11,20 @@ function tagFor(password) {
   return crypto.createHmac('sha256', String(password)).update('controlmause-beacon-v1').digest('hex').slice(0, 16);
 }
 
+/**
+ * Las redes de esta computadora. Windows puede fallar al leerlas justo cuando una red
+ * aparece o desaparece (VPN, Wi-Fi): en ese caso se devuelve una lista vacia.
+ */
+function networkInterfaces() {
+  try {
+    return os.networkInterfaces();
+  } catch {
+    return {};
+  }
+}
+
 /** Direcciones de difusion de cada red a la que esta conectada esta computadora. */
-function broadcastAddresses(interfaces = os.networkInterfaces()) {
+function broadcastAddresses(interfaces = networkInterfaces()) {
   const out = new Set(['255.255.255.255']);
   for (const list of Object.values(interfaces)) {
     for (const i of list || []) {
@@ -32,7 +44,14 @@ function createBeacon({ password, port, discoveryPort, intervalMs = 2000, target
   let timer = null;
   let warned = false;
   const announce = () => {
-    for (const address of targets()) {
+    let addresses;
+    try {
+      addresses = targets();
+    } catch (err) {
+      addresses = ['255.255.255.255'];
+      if (!warned) { warned = true; log(`No se pudieron leer las redes: ${err.message}`); }
+    }
+    for (const address of addresses) {
       socket.send(message, discoveryPort, address, (err) => {
         if (err && !warned) { warned = true; log(`Aviso en la red no enviado a ${address}: ${err.message}`); }
       });
@@ -72,4 +91,4 @@ function createFinder({ password, discoveryPort, onFound, log = () => {} }) {
   };
 }
 
-module.exports = { createBeacon, createFinder, broadcastAddresses, tagFor };
+module.exports = { createBeacon, createFinder, broadcastAddresses, networkInterfaces, tagFor };
