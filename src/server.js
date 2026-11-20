@@ -151,7 +151,6 @@ function createServer(config, helper, log = console.log, { heartbeatMs = 1000, c
 module.exports = { createServer };
 
 if (require.main === module) {
-  const os = require('node:os');
   const { loadConfig } = require('./config');
   const { startHelper } = require('./helper');
   const config = loadConfig();
@@ -162,7 +161,7 @@ if (require.main === module) {
   let beacon = null;
   const app = createServer(config, helper);
   app.listen(config.port).then((port) => {
-    const ips = Object.values(os.networkInterfaces()).flat()
+    const ips = Object.values(require('./discovery').networkInterfaces()).flat()
       .filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i.address);
     console.log(`ControlMause servidor escuchando en el puerto ${port}.`);
     console.log(`IP de esta Windows: ${ips.join(', ') || '(sin red)'}. La Mac la encuentra sola por la red.`);

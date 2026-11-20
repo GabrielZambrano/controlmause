@@ -92,3 +92,16 @@ test('si la IP fija ya no sirve, la Mac cambia a la que anuncia la Windows', asy
   client.stop();
   await server.close();
 });
+
+test('si Windows falla al leer las redes (VPN que aparece o desaparece), el aviso no tumba el programa', async () => {
+  const discoveryPort = await freeUdpPort();
+  const logs = [];
+  let calls = 0;
+  const beacon = createBeacon({
+    password: 'secreto', port: 24810, discoveryPort, intervalMs: 30, log: (m) => logs.push(m),
+    targets: () => { calls++; throw new Error('uv_interface_addresses returned Unknown system error 2'); },
+  });
+  await until(() => calls >= 3);
+  assert.ok(logs.some((l) => l.includes('No se pudieron leer las redes')));
+  beacon.stop();
+});
