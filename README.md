@@ -26,12 +26,12 @@ Tu configuración:
    npm run server
    ```
 4. Si Windows pregunta por el firewall, permite el acceso en **redes privadas**.
-5. Anota la IP que aparece (por ejemplo, `192.168.1.50`).
+5. No hace falta anotar la IP: la Windows la anuncia en la red y la Mac la encuentra sola, aunque cambie.
 
 ## 2. Mac (cliente)
 
 1. Copia la carpeta `controlmause` a la Mac.
-2. Crea `config.json` con la **misma clave** y pon en `"serverHost"` la IP de la Windows.
+2. Crea `config.json` con la **misma clave**. Deja `"serverHost": "auto"` para que la Mac encuentre sola a la Windows.
 3. Abre Terminal en la carpeta y ejecuta:
    ```
    npm run client
@@ -67,7 +67,8 @@ Con esto ControlMause arranca solo al iniciar sesión, en segundo plano y sin ve
 | Opción | Qué hace |
 | --- | --- |
 | `password` | Clave compartida (obligatoria, la misma en ambas). |
-| `serverHost` | IP de la Windows (solo en la Mac). |
+| `serverHost` | Solo en la Mac. `"auto"` (recomendado) busca la Windows en la red. Si pones una IP fija, se usa hasta que llegue el aviso de la Windows. |
+| `discoveryPort` | Puerto UDP del aviso en la red, por defecto el siguiente al `port` (24811). |
 | `port` | Puerto TCP, por defecto 24810. |
 | `macSide` | `"left"` o `"right"`: lado donde está la Mac. |
 | `mouseSpeed` | Velocidad del cursor en la Mac (1 = igual). Prueba 0.6 si va muy rápido. |
@@ -82,14 +83,22 @@ Con esto ControlMause arranca solo al iniciar sesión, en segundo plano y sin ve
 - `src/server.js` y `src/client.js`: Node.js. Se conectan por TCP y deciden cuándo cambiar de pantalla.
 - `npm test`: pruebas automáticas que no necesitan Windows ni Mac.
 
-## Limitaciones conocidas (paso 1)
+## Red y seguridad
+
+- **La Mac encuentra sola a la Windows.** Cada 2 segundos la Windows avisa en la red local "aquí estoy" (UDP, puerto 24811). El aviso lleva una marca sacada de tu clave, así que la Mac ignora otras Windows con ControlMause.
+- **Todo va cifrado** (TLS con tu clave, sin certificados): nadie en la red puede ver lo que escribes ni hacerse pasar por tu Windows. Si las claves no coinciden, no se conecta y lo avisa en las dos.
+- Usa una clave larga: es lo único que protege la conexión.
+- Si la Mac tiene el firewall activado, la primera vez preguntará si `node` puede recibir conexiones: pulsa **Permitir**.
+- En redes de invitados o de hoteles, que suelen aislar a los equipos entre sí, la Mac no verá a la Windows.
+- **Actualiza las dos a la vez.** Esta versión no se entiende con la anterior, porque la anterior no cifraba.
+
+## Limitaciones conocidas
 
 - Mientras controlas la Mac, el cursor de Windows queda quieto en el centro del monitor principal. Ocultarlo es parte del paso 2.
-- La conexión aún no va cifrada (solo la protege la clave). El cifrado es parte del paso 4.
 - Las teclas `Impr Pant` y `Pausa` no se envían.
 
 ## Próximos pasos
 
-2. Mapa de pantallas para arrastrar, retardo o doble toque en el borde, ocultar el cursor de Windows y búsqueda automática de la IP.
+2. Mapa de pantallas para arrastrar, retardo o doble toque en el borde, y ocultar el cursor de Windows.
 3. Portapapeles compartido (texto e imágenes), atajos para saltar de pantalla y bloquear el cursor en una pantalla.
-4. App con Electron: icono en la barra, inicio automático, reconexión y cifrado.
+4. App con Electron: icono en la barra, inicio automático, y reconexión.

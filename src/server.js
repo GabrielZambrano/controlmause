@@ -1,15 +1,8 @@
 // Servidor: se ejecuta en la Windows (la que tiene el teclado y el raton).
-const net = require('node:net');
-const crypto = require('node:crypto');
 const { jsonChannel } = require('./lines');
 const { RemoteCursor } = require('./layout');
 const { windowsToMac } = require('./keymap');
-
-function sameSecret(a, b) {
-  const ha = crypto.createHash('sha256').update(String(a)).digest();
-  const hb = crypto.createHash('sha256').update(String(b)).digest();
-  return crypto.timingSafeEqual(ha, hb);
-}
+const { createSecureServer } = require('./secure');
 
 /**
  * @param {object} config  ver config.example.json
@@ -88,7 +81,7 @@ function createServer(config, helper, log = console.log, { heartbeatMs = 1000, c
     }
   });
 
-  const server = net.createServer((socket) => {
+  const server = createSecureServer(config.password, (socket) => {
     socket.setNoDelay(true);
     let me = null;
     const send = jsonChannel(socket, (msg) => {
@@ -96,13 +89,8 @@ function createServer(config, helper, log = console.log, { heartbeatMs = 1000, c
         me.lastSeen = Date.now();
         return;
       }
+      // Si llego aqui, la conexion cifrada ya comprobo que la clave es la misma.
       if (msg.t !== 'hello') return;
-      if (!sameSecret(msg.password, config.password)) {
-        send({ t: 'denied', reason: 'clave incorrecta' });
-        log(`Conexion rechazada desde ${socket.remoteAddress}: clave incorrecta.`);
-        socket.end();
-        return;
-      }
       if (client) {
         const duplicated = Date.now() - client.since < 10000;
         log(`Reemplazando la conexion anterior de ${client.name}.${duplicated ? ' Parece que hay dos ControlMause abiertos en esa Mac: deja solo uno.' : ''}`);
@@ -138,6 +126,14 @@ function createServer(config, helper, log = console.log, { heartbeatMs = 1000, c
   }, heartbeatMs);
   server.on('close', () => clearInterval(ping));
 
+  // Una conexion que no supera el cifrado casi siempre es una clave distinta en la Mac.
+  let lastRejected = 0;
+  server.on('tlsClientError', (_err, socket) => {
+    if (Date.now() - lastRejected < 30000) return;
+    lastRejected = Date.now();
+    log(`Conexion rechazada desde ${socket.remoteAddress || 'la red'}: la clave no coincide (o es una version vieja de ControlMause).`);
+  });
+
   return {
     server,
     listen: (port = config.port, host) => new Promise((resolve, reject) => {
@@ -162,12 +158,15 @@ if (require.main === module) {
   const helper = startHelper('windows');
   helper.on('exit', (code) => { console.log(`El ayudante de Windows termino (codigo ${code}).`); process.exit(1); });
   helper.on('error', (err) => { console.error(`No se pudo iniciar PowerShell: ${err.message}`); process.exit(1); });
+  const { createBeacon } = require('./discovery');
+  let beacon = null;
   const app = createServer(config, helper);
   app.listen(config.port).then((port) => {
     const ips = Object.values(os.networkInterfaces()).flat()
       .filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i.address);
     console.log(`ControlMause servidor escuchando en el puerto ${port}.`);
-    console.log(`En la Mac, pon "serverHost" con una de estas IP: ${ips.join(', ') || '(sin red)'}`);
+    console.log(`IP de esta Windows: ${ips.join(', ') || '(sin red)'}. La Mac la encuentra sola por la red.`);
+    beacon = createBeacon({ password: config.password, port, discoveryPort: config.discoveryPort, log: console.log });
     console.log('Atajo de emergencia para volver a Windows: Ctrl+Alt+F12.');
   }).catch((err) => {
     console.error(err.code === 'EADDRINUSE'
@@ -176,7 +175,7 @@ if (require.main === module) {
     helper.stop();
     process.exit(1);
   });
-  const stop = () => { helper.stop(); app.close().then(() => process.exit(0)); };
+  const stop = () => { if (beacon) beacon.stop(); helper.stop(); app.close().then(() => process.exit(0)); };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
 }

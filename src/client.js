@@ -1,7 +1,7 @@
 // Cliente: se ejecuta en la Mac. Recibe el raton y el teclado de la Windows.
-const net = require('node:net');
 const os = require('node:os');
 const { jsonChannel } = require('./lines');
+const secure = require('./secure');
 const { NO_POWER } = require('./mac-power');
 
 /**
@@ -15,6 +15,17 @@ function createClient(config, helper, log = console.log, { power = NO_POWER, ser
   let retry = null;
   let welcomed = false;
   let lastSeen = 0;
+  // Direccion de la Windows: la fija de config.json, o la que anuncia en la red.
+  const fixedHost = config.serverHost && config.serverHost !== 'auto' ? config.serverHost : null;
+  let found = null;        // { host, port } del ultimo aviso recibido
+  let current = null;      // a donde se esta conectando ahora
+  let lastProblem = '';
+  const target = () => found || (fixedHost ? { host: fixedHost, port: config.port } : null);
+  const problem = (text) => {
+    if (text === lastProblem) return;
+    lastProblem = text;
+    log(text);
+  };
 
   const watchdog = setInterval(() => {
     if (!welcomed || Date.now() - lastSeen <= serverTimeoutMs) return;
@@ -34,31 +45,46 @@ function createClient(config, helper, log = console.log, { power = NO_POWER, ser
       case 'welcome':
         welcomed = true;
         power.hold();
-        log(`Conectado a ${config.serverHost}:${config.port}.`);
+        lastProblem = '';
+        log(`Conectado a la Windows (${current.host}:${current.port}), conexion cifrada.`);
         break;
-      case 'denied': log(`El servidor rechazo la conexion: ${msg.reason}`); stopped = true; break;
     }
   };
 
   const connect = () => {
-    if (stopped) return;
-    socket = net.connect({ host: config.serverHost, port: config.port });
-    socket.setNoDelay(true);
-    const send = jsonChannel(socket, (msg) => {
+    retry = null;
+    if (stopped || socket) return;
+    current = target();
+    if (!current) {
+      problem('Buscando la Windows en la red...');
+      retry = setTimeout(connect, retryMs);
+      return;
+    }
+    const me = secure.connect({ host: current.host, port: current.port, password: config.password });
+    socket = me;
+    me.setNoDelay(true);
+    const send = jsonChannel(me, (msg) => {
       lastSeen = Date.now();
       if (msg.t === 'ping') send({ t: 'pong' });
       else toHelper(msg);
     });
-    socket.on('connect', () => {
-      socket.setKeepAlive(true, 2000);
-      send({ t: 'hello', password: config.password, name: os.hostname(), width: screen.width, height: screen.height, heartbeat: true });
+    me.on('secureConnect', () => {
+      me.setKeepAlive(true, 2000);
+      send({ t: 'hello', name: os.hostname(), width: screen.width, height: screen.height, heartbeat: true });
     });
-    socket.on('error', () => {});
-    socket.on('close', () => {
+    me.on('error', (err) => {
+      if (/SSL|TLS|alert|handshake/i.test(`${err.code} ${err.message}`)) {
+        problem('La Windows rechazo la conexion cifrada: revisa que la clave sea la misma en las dos (y que las dos tengan la version nueva).');
+      } else if (['ECONNREFUSED', 'EHOSTUNREACH', 'ETIMEDOUT', 'ENETUNREACH', 'EHOSTDOWN'].includes(err.code)) {
+        problem(`La Windows no responde en ${current.host}:${current.port}. ${fixedHost && !found ? 'Revisa la IP o pon "serverHost": "auto".' : 'Esperando...'}`);
+      }
+    });
+    me.on('close', () => {
+      if (socket === me) socket = null;
       welcomed = false;
       power.release();
       helper.send('RESET');
-      if (stopped) return;
+      if (stopped || retry) return;
       retry = setTimeout(connect, retryMs);
     });
   };
@@ -67,7 +93,7 @@ function createClient(config, helper, log = console.log, { power = NO_POWER, ser
     const p = line.split(' ');
     if (p[0] === 'READY' && !screen) {
       screen = { width: Number(p[1]), height: Number(p[2]) };
-      log(`Pantalla de la Mac: ${screen.width}x${screen.height}. Conectando con ${config.serverHost}...`);
+      log(`Pantalla de la Mac: ${screen.width}x${screen.height}. ${fixedHost ? `Conectando con ${fixedHost}...` : 'Buscando la Windows en la red...'}`);
       connect();
     } else if (p[0] === 'NOACCESS') {
       log(`Falta el permiso de Accesibilidad: activalo en Ajustes del Sistema > Privacidad y seguridad > Accesibilidad (en segundo plano es para "node": ${process.execPath}).`);
@@ -75,6 +101,18 @@ function createClient(config, helper, log = console.log, { power = NO_POWER, ser
   });
 
   return {
+    /** La Windows se anuncio en la red. */
+    found(host, port) {
+      const changed = !found || found.host !== host || found.port !== port;
+      found = { host, port };
+      if (!changed) return;
+      log(`Windows encontrada en la red: ${host}:${port}.`);
+      // Si estamos conectados a otra direccion que no responde, cambiamos ya.
+      if (screen && !welcomed) {
+        if (socket) socket.destroy();
+        else { clearTimeout(retry); connect(); }
+      }
+    },
     stop() {
       stopped = true;
       clearTimeout(retry);
@@ -91,10 +129,6 @@ if (require.main === module) {
   const { loadConfig } = require('./config');
   const { startHelper } = require('./helper');
   const config = loadConfig();
-  if (!config.serverHost) {
-    console.error('Falta "serverHost" en config.json: pon la IP de la Windows.');
-    process.exit(1);
-  }
   const { waitForLock } = require('./single-instance');
   let running = null;
   const stop = () => {
@@ -109,7 +143,10 @@ if (require.main === module) {
       helper.on('exit', (code) => { console.log(`El ayudante de Mac termino (codigo ${code}).`); process.exit(1); });
       const { createPower } = require('./mac-power');
       const power = createPower({ keepAwake: config.keepMacAwake !== false });
-      running = { helper, client: createClient(config, helper, console.log, { power }) };
+      const client = createClient(config, helper, console.log, { power });
+      const { createFinder } = require('./discovery');
+      createFinder({ password: config.password, discoveryPort: config.discoveryPort, onFound: client.found, log: console.log });
+      running = { helper, client };
     })
     .catch((err) => {
       console.error(`No se pudo comprobar si hay otro ControlMause abierto: ${err.message}`);

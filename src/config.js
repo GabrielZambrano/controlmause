@@ -4,7 +4,8 @@ const path = require('node:path');
 const DEFAULTS = {
   port: 24810,
   password: '',
-  serverHost: '',
+  serverHost: 'auto',
+  discoveryPort: null,
   macSide: 'left',
   mouseSpeed: 1,
   scrollSpeed: 1,
@@ -17,6 +18,8 @@ function loadConfig(file = process.env.CONTROLMAUSE_CONFIG || path.join(__dirnam
   let user = {};
   if (fs.existsSync(file)) user = JSON.parse(fs.readFileSync(file, 'utf8'));
   const config = { ...DEFAULTS, ...user, modifiers: { ...DEFAULTS.modifiers, ...(user.modifiers || {}) } };
+  if (!config.discoveryPort) config.discoveryPort = config.port + 1;
+  if (!config.serverHost) config.serverHost = 'auto';
   if (!config.password) {
     throw new Error(`Falta "password" en ${file}. Copia config.example.json a config.json y pon una clave.`);
   }
