@@ -106,3 +106,16 @@ test('una clave incorrecta se rechaza', async () => {
   client.stop();
   await server.close();
 });
+
+test('con la Mac arriba se avisa el borde de arriba y se vuelve bajando', async () => {
+  const { win, mac, server, client } = await setup({ macSide: 'top' });
+  await waitFor(win, /^EDGE top$/);
+  win.say('ENTER 0.5');
+  await waitFor(mac, /^MOVE 720 899$/);
+  win.say('M 0 -100');
+  await waitFor(mac, /^MOVE 720 799$/);
+  win.say('M 0 200');
+  await waitFor(win, /^RELEASE 0\.5000$/);
+  client.stop();
+  await server.close();
+});
