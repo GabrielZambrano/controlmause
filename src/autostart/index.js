@@ -20,10 +20,7 @@ function printStatus(target) {
 function main(action) {
   const target = platform();
   if (action === 'on') {
-    const config = loadConfig();
-    if (process.platform === 'darwin' && !config.serverHost) {
-      throw new Error('Falta "serverHost" en config.json: pon la IP de la Windows.');
-    }
+    loadConfig();   // falla aqui si falta la clave
     target.install();
     console.log('Comprobando que arranco...');
     setTimeout(() => printStatus(target), CHECK_DELAY_MS);

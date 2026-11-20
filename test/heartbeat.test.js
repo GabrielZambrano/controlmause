@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const net = require('node:net');
+const secure = require('../src/secure');
 const { EventEmitter } = require('node:events');
 const { createServer } = require('../src/server');
 const { createClient } = require('../src/client');
@@ -32,16 +32,16 @@ function until(check, timeoutMs = 3000) {
 }
 
 function rawMac(port, hello) {
-  const socket = net.connect({ port, host: '127.0.0.1' });
+  const socket = secure.connect({ port, host: '127.0.0.1', password: 'secreto' });
   socket.on('error', () => {});
   const send = jsonChannel(socket, () => {});
-  socket.on('connect', () => send({ t: 'hello', password: 'secreto', name: 'Mac', width: 100, height: 100, ...hello }));
+  socket.on('secureConnect', () => send({ t: 'hello', name: 'Mac', width: 100, height: 100, ...hello }));
   return socket;
 }
 
 test('la Mac se reconecta si la Windows deja de responder, como al despertar del reposo', async () => {
   let connections = 0;
-  const silent = net.createServer((socket) => {
+  const silent = secure.createSecureServer('secreto', (socket) => {
     connections++;
     socket.on('error', () => {});
     const send = jsonChannel(socket, (msg) => {
