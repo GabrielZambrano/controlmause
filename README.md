@@ -62,6 +62,14 @@ Con esto ControlMause arranca solo al iniciar sesión, en segundo plano y sin ve
   - Como usa una copia, cada vez que cambies `config.json` o hagas `git pull`, vuelve a correr `npm run autostart`.
 - Con el inicio automático activo ya no hace falta `npm run server` ni `npm run client`. Si los corres igual, el servidor avisa que el puerto ya está en uso.
 
+## Mac arriba o abajo
+
+Pon `"macSide": "top"` en el `config.json` de la **Windows** y vuelve a correr `npm run autostart`. En la Mac no hay que cambiar nada.
+
+- Subes el ratón por el borde de arriba de cualquier pantalla de Windows y apareces abajo en la Mac, a la misma altura horizontal. Para volver, baja por el borde de abajo de la Mac.
+- En los 60 píxeles de cada esquina no se cambia de pantalla. Así puedes usar el botón de cerrar o los menús de arriba sin pasar a la Mac.
+- `"bottom"` funciona igual, pero con la Mac abajo.
+
 ## Opciones de `config.json`
 
 | Opción | Qué hace |
@@ -70,7 +78,7 @@ Con esto ControlMause arranca solo al iniciar sesión, en segundo plano y sin ve
 | `serverHost` | Solo en la Mac. `"auto"` (recomendado) busca la Windows en la red. Si pones una IP fija, se usa hasta que llegue el aviso de la Windows. |
 | `discoveryPort` | Puerto UDP del aviso en la red, por defecto el siguiente al `port` (24811). |
 | `port` | Puerto TCP, por defecto 24810. |
-| `macSide` | `"left"` o `"right"`: lado donde está la Mac. |
+| `macSide` | Dónde está la Mac respecto a la Windows: `"left"`, `"right"`, `"top"` (arriba) o `"bottom"` (abajo). Se configura en la Windows. |
 | `mouseSpeed` | Velocidad del cursor en la Mac (1 = igual). Prueba 0.6 si va muy rápido. |
 | `scrollSpeed` / `invertScroll` | Velocidad y sentido de la rueda. |
 | `keepMacAwake` | `true` (por defecto): la Mac no entra en reposo sola mientras está conectada a la Windows (la pantalla sí se apaga y se enciende al entrar con el ratón). `false` para que duerma normal. |

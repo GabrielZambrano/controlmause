@@ -1,6 +1,6 @@
 // Servidor: se ejecuta en la Windows (la que tiene el teclado y el raton).
 const { jsonChannel } = require('./lines');
-const { RemoteCursor } = require('./layout');
+const { RemoteCursor, SIDE_NAMES } = require('./layout');
 const { windowsToMac } = require('./keymap');
 const { createSecureServer } = require('./secure');
 
@@ -101,7 +101,7 @@ function createServer(config, helper, log = console.log, { heartbeatMs = 1000, c
       cursor.setScreen(Number(msg.width), Number(msg.height));
       send({ t: 'welcome' });
       helper.send(`EDGE ${cursor.windowsEdge()}`);
-      log(`Conectado: ${me.name} (${msg.width}x${msg.height}). Mueve el raton al borde ${config.macSide === 'left' ? 'izquierdo' : 'derecho'}.`);
+      log(`Conectado: ${me.name} (${msg.width}x${msg.height}). Mueve el raton al borde ${SIDE_NAMES[config.macSide]}.`);
     });
     socket.on('error', () => {});
     socket.on('close', () => {

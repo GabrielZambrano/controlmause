@@ -4,7 +4,7 @@
 #
 # Salida (una linea por evento):
 #   READY <izq> <arriba> <ancho> <alto>   escritorio virtual
-#   ENTER <fraccionY>                      el cursor cruzo el borde
+#   ENTER <fraccion>                       el cursor cruzo el borde (posicion a lo largo del borde, 0..1)
 #   M <dx> <dy>                            movimiento relativo mientras se controla la Mac
 #   B <L|R|M> <D|U>                        botones
 #   W <delta>  /  H <delta>                rueda vertical / horizontal (120 = un paso)
@@ -12,8 +12,8 @@
 #   RELEASED                               se volvio a Windows por atajo o por seguridad
 #
 # Entrada (stdin):
-#   EDGE left|right|none   en que borde esta la Mac (none = sin cliente conectado)
-#   RELEASE <fraccionY>    volver a Windows y colocar el cursor junto al borde
+#   EDGE left|right|top|bottom|none   en que borde esta la Mac (none = sin cliente conectado)
+#   RELEASE <fraccion>     volver a Windows y colocar el cursor junto al borde
 #   PING                   Node sigue vivo (si no llega en 3 s se suelta el control)
 #   QUIT
 
@@ -85,10 +85,39 @@ public static class CmHook {
         return info.rcMonitor;
     }
 
+    static bool HasMonitor(int x, int y) {
+        POINT q; q.x = x; q.y = y;
+        return MonitorFromPoint(q, 0 /* MONITOR_DEFAULTTONULL */) != IntPtr.Zero;
+    }
+
+    // Distancia a las esquinas en la que no se cambia de pantalla por arriba o por abajo,
+    // para poder usar el boton de cerrar o el menu Inicio sin pasar a la Mac.
+    const int CORNER = 60;
+
+    /** Toca el cursor el borde por el que se pasa a la Mac? */
+    static bool HitsEdge(POINT p, string e) {
+        if (e == "left") return p.x <= VsLeft();
+        if (e == "right") return p.x >= VsLeft() + VsWidth() - 1;
+        if (e != "top" && e != "bottom") return false;
+        RECT mon = MonitorAt(p);
+        if (p.x < mon.left + CORNER || p.x > mon.right - 1 - CORNER) return false;
+        if (e == "top") return p.y <= mon.top && !HasMonitor(p.x, mon.top - 1);
+        return p.y >= mon.bottom - 1 && !HasMonitor(p.x, mon.bottom);
+    }
+
+    static bool Vertical(string e) { return e == "top" || e == "bottom"; }
+
     static void StartCapture(POINT p) {
         enterMonitor = MonitorAt(p);
-        double h = Math.Max(1, enterMonitor.bottom - enterMonitor.top);
-        double frac = Math.Min(1.0, Math.Max(0.0, (p.y - enterMonitor.top) / h));
+        double frac;
+        if (Vertical(edge)) {
+            double w = Math.Max(1, enterMonitor.right - enterMonitor.left);
+            frac = (p.x - enterMonitor.left) / w;
+        } else {
+            double h = Math.Max(1, enterMonitor.bottom - enterMonitor.top);
+            frac = (p.y - enterMonitor.top) / h;
+        }
+        frac = Math.Min(1.0, Math.Max(0.0, frac));
         // Centro de la pantalla principal: desde ahi medimos cuanto se mueve el raton.
         center.x = GetSystemMetrics(0) / 2;
         center.y = GetSystemMetrics(1) / 2;
@@ -102,8 +131,15 @@ public static class CmHook {
         capturing = false;
         RECT m = enterMonitor;
         if (m.right <= m.left) { m.left = 0; m.top = 0; m.right = GetSystemMetrics(0); m.bottom = GetSystemMetrics(1); }
-        int y = m.top + (int)Math.Round(frac * (m.bottom - m.top - 1));
-        int x = edge == "right" ? m.right - 3 : m.left + 2;
+        int x, y;
+        if (Vertical(edge)) {
+            x = m.left + (int)Math.Round(frac * (m.right - m.left - 1));
+            x = Math.Max(m.left + CORNER + 1, Math.Min(m.right - CORNER - 2, x));
+            y = edge == "bottom" ? m.bottom - 3 : m.top + 2;
+        } else {
+            y = m.top + (int)Math.Round(frac * (m.bottom - m.top - 1));
+            x = edge == "right" ? m.right - 3 : m.left + 2;
+        }
         SetCursorPos(x, y);
     }
 
@@ -117,10 +153,7 @@ public static class CmHook {
                 if (msg == WM_LBUTTONUP || msg == WM_RBUTTONUP || msg == WM_MBUTTONUP) buttonsDown = Math.Max(0, buttonsDown - 1);
                 // No cambiamos de pantalla si se esta arrastrando algo.
                 if (msg == WM_MOUSEMOVE && !injected && buttonsDown == 0) {
-                    string e = edge;
-                    bool hit = (e == "left" && m.pt.x <= VsLeft()) ||
-                               (e == "right" && m.pt.x >= VsLeft() + VsWidth() - 1);
-                    if (hit) { StartCapture(m.pt); return (IntPtr)1; }
+                    if (HitsEdge(m.pt, edge)) { StartCapture(m.pt); return (IntPtr)1; }
                 }
             } else if (!injected) {
                 switch (msg) {

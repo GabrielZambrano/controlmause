@@ -34,3 +34,34 @@ test('Mac a la derecha y velocidad configurable', () => {
   assert.deepStrictEqual(c.move(10, -10), { x: 20, y: 579 });
   assert.ok('leave' in c.move(-11, 0));
 });
+
+test('Mac arriba: se entra por su borde de abajo a la misma altura horizontal', () => {
+  const c = new RemoteCursor({ side: 'top' });
+  c.setScreen(1921, 1080);
+  assert.deepStrictEqual(c.enter(0.25), { x: 480, y: 1079 });
+  assert.deepStrictEqual(c.move(100, -500), { x: 580, y: 579 });
+  assert.deepStrictEqual(c.move(-5000, 0), { x: 0, y: 579 });   // no se sale por los lados
+  assert.deepStrictEqual(c.move(0, -9000), { x: 0, y: 0 });     // ni por arriba
+});
+
+test('Mac arriba: bajar del todo vuelve a Windows en la misma posicion horizontal', () => {
+  const c = new RemoteCursor({ side: 'top' });
+  c.setScreen(1001, 600);
+  c.enter(0.5);
+  assert.deepStrictEqual(c.move(250, 0), { x: 750, y: 599 });
+  const r = c.move(0, 1);
+  assert.strictEqual(r.leave, 0.75);
+  assert.strictEqual(c.active, false);
+});
+
+test('Mac abajo: se entra por arriba y se vuelve subiendo', () => {
+  const c = new RemoteCursor({ side: 'bottom' });
+  c.setScreen(1001, 600);
+  assert.deepStrictEqual(c.enter(0), { x: 0, y: 0 });
+  assert.deepStrictEqual(c.move(0, 10), { x: 0, y: 10 });
+  assert.ok('leave' in c.move(0, -11));
+});
+
+test('un lado que no existe da un error claro', () => {
+  assert.throws(() => new RemoteCursor({ side: 'arriba' }), /macSide/);
+});
