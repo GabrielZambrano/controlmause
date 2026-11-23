@@ -27,7 +27,7 @@ const quiet = () => {};
 
 async function setup(extra = {}) {
   const config = { port: 0, password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1,
-    invertScroll: false, modifiers: {}, serverHost: '127.0.0.1', ...extra };
+    invertScroll: false, edgeGraceMs: 0, modifiers: {}, serverHost: '127.0.0.1', ...extra };
   const win = fakeHelper();
   const mac = fakeHelper();
   const server = createServer(config, win, quiet);

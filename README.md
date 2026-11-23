@@ -81,6 +81,7 @@ Pon `"macSide": "top"` en el `config.json` de la **Windows** y vuelve a correr `
 | `macSide` | Dónde está la Mac respecto a la Windows: `"left"`, `"right"`, `"top"` (arriba) o `"bottom"` (abajo). Se configura en la Windows. |
 | `mouseSpeed` | Velocidad del cursor en la Mac (1 = igual). Prueba 0.6 si va muy rápido. |
 | `scrollSpeed` / `invertScroll` | Velocidad y sentido de la rueda. |
+| `edgeGraceMs` | Milisegundos después de entrar a la Mac en los que no se vuelve a Windows, para que el ratón no rebote al cruzar el borde (por defecto 400). Va en la Windows. |
 | `keepMacAwake` | `true` (por defecto): la Mac no entra en reposo sola mientras ControlMause está abierto, aunque la Windows se apague o se reinicie, para que pueda volver a conectarse sola (la pantalla sí se apaga y se enciende al entrar con el ratón). `false` para que duerma normal. |
 | `modifiers` | A qué tecla de Mac va cada modificador: `ctrl`, `win` y `alt` → `command`, `control` u `option`. |
 

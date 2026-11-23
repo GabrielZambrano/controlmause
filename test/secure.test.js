@@ -5,7 +5,7 @@ const { EventEmitter } = require('node:events');
 const { createServer } = require('../src/server');
 const { createClient } = require('../src/client');
 
-const CONFIG = { password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1, invertScroll: false, modifiers: {} };
+const CONFIG = { password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1, invertScroll: false, edgeGraceMs: 0, modifiers: {} };
 
 function fakeHelper() {
   const h = new EventEmitter();

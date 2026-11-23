@@ -10,7 +10,7 @@ const { createSecureServer } = require('./secure');
  * @param {(msg:string)=>void} log
  */
 function createServer(config, helper, log = console.log, { heartbeatMs = 1000, clientTimeoutMs = 10000 } = {}) {
-  const cursor = new RemoteCursor({ side: config.macSide, speed: config.mouseSpeed });
+  const cursor = new RemoteCursor({ side: config.macSide, speed: config.mouseSpeed, graceMs: config.edgeGraceMs });
   let client = null;       // { send, socket, name }
   let remote = false;      // true mientras el raton controla la Mac
   const wheelRest = { W: 0, H: 0 };   // restos de la rueda (touchpads envian pasos pequenos)

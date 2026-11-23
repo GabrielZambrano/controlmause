@@ -11,6 +11,7 @@ const DEFAULTS = {
   scrollSpeed: 1,
   invertScroll: false,
   keepMacAwake: true,
+  edgeGraceMs: 400,
   modifiers: { ctrl: 'command', win: 'control', alt: 'option' },
 };
 

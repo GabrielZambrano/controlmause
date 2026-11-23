@@ -7,7 +7,7 @@ const { createClient } = require('../src/client');
 const { createPower } = require('../src/mac-power');
 const { jsonChannel } = require('../src/lines');
 
-const CONFIG = { password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1, invertScroll: false, modifiers: {}, serverHost: '127.0.0.1' };
+const CONFIG = { password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1, invertScroll: false, edgeGraceMs: 0, modifiers: {}, serverHost: '127.0.0.1' };
 const quiet = () => {};
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

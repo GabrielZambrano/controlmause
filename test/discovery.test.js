@@ -6,7 +6,7 @@ const { createBeacon, createFinder, broadcastAddresses } = require('../src/disco
 const { createServer } = require('../src/server');
 const { createClient } = require('../src/client');
 
-const CONFIG = { password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1, invertScroll: false, modifiers: {} };
+const CONFIG = { password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1, invertScroll: false, edgeGraceMs: 0, modifiers: {} };
 const quiet = () => {};
 
 function fakeHelper() {
