@@ -30,6 +30,9 @@ function createServer(config, helper, log = console.log, { heartbeatMs = 1000, c
       case 'READY':
         log(`Ayudante de Windows listo (escritorio ${p[3]}x${p[4]}).`);
         break;
+      case 'REHOOKED':
+        log('Windows habia desactivado la deteccion del raton; se volvio a activar sola.');
+        break;
       case 'ERROR':
         log(`Error del ayudante de Windows: ${line.slice(6)}`);
         break;
