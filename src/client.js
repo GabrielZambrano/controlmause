@@ -44,7 +44,6 @@ function createClient(config, helper, log = console.log, { power = NO_POWER, ser
       case 'enter': power.wakeDisplay(); log('-> recibiendo el control'); break;
       case 'welcome':
         welcomed = true;
-        power.hold();
         lastProblem = '';
         log(`Conectado a la Windows (${current.host}:${current.port}), conexion cifrada.`);
         break;
@@ -82,7 +81,6 @@ function createClient(config, helper, log = console.log, { power = NO_POWER, ser
     me.on('close', () => {
       if (socket === me) socket = null;
       welcomed = false;
-      power.release();
       helper.send('RESET');
       if (stopped || retry) return;
       retry = setTimeout(connect, retryMs);
@@ -93,6 +91,10 @@ function createClient(config, helper, log = console.log, { power = NO_POWER, ser
     const p = line.split(' ');
     if (p[0] === 'READY' && !screen) {
       screen = { width: Number(p[1]), height: Number(p[2]) };
+      // La Mac no entra en reposo mientras ControlMause corre, aunque la Windows se
+      // apague o reinicie: si se durmiera, sin teclado propio nadie podria despertarla
+      // y no volveria a conectarse sola.
+      power.hold();
       log(`Pantalla de la Mac: ${screen.width}x${screen.height}. ${fixedHost ? `Conectando con ${fixedHost}...` : 'Buscando la Windows en la red...'}`);
       connect();
     } else if (p[0] === 'NOACCESS') {

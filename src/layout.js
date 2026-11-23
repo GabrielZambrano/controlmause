@@ -10,10 +10,18 @@
 const SIDES = ['left', 'right', 'top', 'bottom'];
 
 class RemoteCursor {
-  constructor({ side = 'left', speed = 1 } = {}) {
+  /**
+   * @param {object} o
+   * @param {number} o.graceMs  tiempo justo despues de entrar a la Mac en el que no se vuelve
+   *   a Windows: al cruzar el borde el raton suele "temblar" hacia atras y rebotaba al instante.
+   */
+  constructor({ side = 'left', speed = 1, graceMs = 400, now = Date.now } = {}) {
     if (!SIDES.includes(side)) throw new Error(`"macSide" debe ser ${SIDES.join(', ')} (no "${side}").`);
     this.side = side;
     this.speed = speed;
+    this.graceMs = graceMs;
+    this.now = now;
+    this.enteredAt = 0;
     this.width = 0;
     this.height = 0;
     this.x = 0;
@@ -33,6 +41,7 @@ class RemoteCursor {
   /** Entrar a la Mac en la misma posicion relativa (0..1) del borde por el que se salio de Windows. */
   enter(fraction) {
     this.active = true;
+    this.enteredAt = this.now();
     const f = clamp(fraction, 0, 1);
     if (this.vertical) {
       this.x = f * (this.width - 1);
@@ -54,14 +63,15 @@ class RemoteCursor {
     const maxX = this.width - 1;
     const maxY = this.height - 1;
     let leaving;
+    const settling = this.now() - this.enteredAt < this.graceMs;
     if (this.vertical) {
       nx = clamp(nx, 0, maxX);
       leaving = this.side === 'top' ? ny > maxY : ny < 0;
-      if (leaving) return this.leave(maxX > 0 ? nx / maxX : 0.5);
+      if (leaving && !settling) return this.leave(maxX > 0 ? nx / maxX : 0.5);
     } else {
       ny = clamp(ny, 0, maxY);
       leaving = this.side === 'left' ? nx > maxX : nx < 0;
-      if (leaving) return this.leave(maxY > 0 ? ny / maxY : 0.5);
+      if (leaving && !settling) return this.leave(maxY > 0 ? ny / maxY : 0.5);
     }
     this.x = clamp(nx, 0, maxX);
     this.y = clamp(ny, 0, maxY);

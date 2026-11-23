@@ -10,6 +10,7 @@
 #   W <delta>  /  H <delta>                rueda vertical / horizontal (120 = un paso)
 #   K <vk> <scan> <D|U> <extendida 0|1>    teclas
 #   RELEASED                               se volvio a Windows por atajo o por seguridad
+#   REHOOKED                               Windows habia quitado los hooks y se volvieron a poner
 #
 # Entrada (stdin):
 #   EDGE left|right|top|bottom|none   en que borde esta la Mac (none = sin cliente conectado)
@@ -43,6 +44,7 @@ public static class CmHook {
     [DllImport("user32.dll")] static extern int GetMessage(out MSG msg, IntPtr hwnd, uint min, uint max);
     [DllImport("user32.dll")] static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
     [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr hMon, ref MONITORINFO info);
@@ -70,6 +72,11 @@ public static class CmHook {
     static POINT center;
     static RECT enterMonitor;
     static long lastPing = 0;
+    static int mouseEvents = 0;        // eventos que llegaron al hook desde la ultima revision
+    static volatile bool warped = false;  // movimos el cursor nosotros (no genera eventos)
+    const uint WM_REHOOK = 0x8001;     // WM_APP + 1
+
+    static void Warp(int x, int y) { warped = true; SetCursorPos(x, y); }
 
     static void Emit(string s) { outQueue.Add(s); }
 
@@ -122,7 +129,7 @@ public static class CmHook {
         center.x = GetSystemMetrics(0) / 2;
         center.y = GetSystemMetrics(1) / 2;
         capturing = true;
-        SetCursorPos(center.x, center.y);
+        Warp(center.x, center.y);
         Emit("ENTER " + frac.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
@@ -140,10 +147,11 @@ public static class CmHook {
             y = m.top + (int)Math.Round(frac * (m.bottom - m.top - 1));
             x = edge == "right" ? m.right - 3 : m.left + 2;
         }
-        SetCursorPos(x, y);
+        Warp(x, y);
     }
 
     static IntPtr MouseHook(int nCode, IntPtr wParam, IntPtr lParam) {
+        Interlocked.Increment(ref mouseEvents);
         if (nCode >= 0) {
             var m = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
             int msg = wParam.ToInt32();
@@ -241,17 +249,50 @@ public static class CmHook {
         foreach (var s in outQueue.GetConsumingEnumerable()) stdout.WriteLine(s);
     }
 
+    static bool InstallHooks() {
+        IntPtr mod = GetModuleHandle(null);
+        mouseHook = SetWindowsHookEx(WH_MOUSE_LL, mouseProc, mod, 0);
+        keyHook = SetWindowsHookEx(WH_KEYBOARD_LL, keyProc, mod, 0);
+        return mouseHook != IntPtr.Zero && keyHook != IntPtr.Zero;
+    }
+
+    // Windows quita en silencio los hooks de bajo nivel si alguna vez tardan en responder.
+    // Lo detectamos asi: el cursor se movio pero al hook no le llego ningun evento.
+    // Entonces pedimos al hilo principal que los vuelva a instalar.
+    static void HookGuard() {
+        POINT last;
+        GetCursorPos(out last);
+        while (true) {
+            Thread.Sleep(1000);
+            POINT now;
+            if (!GetCursorPos(out now)) continue;
+            int events = Interlocked.Exchange(ref mouseEvents, 0);
+            bool moved = now.x != last.x || now.y != last.y;
+            bool ourMove = warped;
+            warped = false;
+            last = now;
+            if (moved && events == 0 && !ourMove) PostThreadMessage(loopThread, WM_REHOOK, IntPtr.Zero, IntPtr.Zero);
+        }
+    }
+
+    static void Rehook() {
+        UnhookWindowsHookEx(mouseHook);
+        UnhookWindowsHookEx(keyHook);
+        if (capturing) { Release(0.5); Emit("RELEASED"); }
+        if (InstallHooks()) Emit("REHOOKED");
+        else Emit("ERROR no se pudieron volver a instalar los hooks (" + Marshal.GetLastWin32Error() + ")");
+    }
+
     public static void Run() {
         try { SetProcessDpiAwarenessContext((IntPtr)(-4)); } catch { }
         try { SetThreadDpiAwarenessContext((IntPtr)(-4)); } catch { }
         loopThread = GetCurrentThreadId();
         Interlocked.Exchange(ref lastPing, DateTime.UtcNow.Ticks);
 
+        // Prioridad algo mayor para que Windows no considere lento al hook y lo quite.
+        try { System.Diagnostics.Process.GetCurrentProcess().PriorityClass = System.Diagnostics.ProcessPriorityClass.AboveNormal; } catch { }
         new Thread(WriteOutput) { IsBackground = true }.Start();
-        IntPtr mod = GetModuleHandle(null);
-        mouseHook = SetWindowsHookEx(WH_MOUSE_LL, mouseProc, mod, 0);
-        keyHook = SetWindowsHookEx(WH_KEYBOARD_LL, keyProc, mod, 0);
-        if (mouseHook == IntPtr.Zero || keyHook == IntPtr.Zero) {
+        if (!InstallHooks()) {
             Emit("ERROR no se pudieron instalar los hooks (" + Marshal.GetLastWin32Error() + ")");
             Thread.Sleep(300);
             return;
@@ -259,9 +300,12 @@ public static class CmHook {
         Emit("READY " + VsLeft() + " " + VsTop() + " " + VsWidth() + " " + VsHeight());
         new Thread(ReadCommands) { IsBackground = true }.Start();
         new Thread(Watchdog) { IsBackground = true }.Start();
+        new Thread(HookGuard) { IsBackground = true }.Start();
 
         MSG msg;
-        while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0) { }
+        while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0) {
+            if (msg.message == WM_REHOOK) Rehook();
+        }
 
         capturing = false;
         UnhookWindowsHookEx(mouseHook);

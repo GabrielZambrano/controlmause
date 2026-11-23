@@ -10,7 +10,7 @@ const { createSecureServer } = require('./secure');
  * @param {(msg:string)=>void} log
  */
 function createServer(config, helper, log = console.log, { heartbeatMs = 1000, clientTimeoutMs = 10000 } = {}) {
-  const cursor = new RemoteCursor({ side: config.macSide, speed: config.mouseSpeed });
+  const cursor = new RemoteCursor({ side: config.macSide, speed: config.mouseSpeed, graceMs: config.edgeGraceMs });
   let client = null;       // { send, socket, name }
   let remote = false;      // true mientras el raton controla la Mac
   const wheelRest = { W: 0, H: 0 };   // restos de la rueda (touchpads envian pasos pequenos)
@@ -29,6 +29,9 @@ function createServer(config, helper, log = console.log, { heartbeatMs = 1000, c
     switch (p[0]) {
       case 'READY':
         log(`Ayudante de Windows listo (escritorio ${p[3]}x${p[4]}).`);
+        break;
+      case 'REHOOKED':
+        log('Windows habia desactivado la deteccion del raton; se volvio a activar sola.');
         break;
       case 'ERROR':
         log(`Error del ayudante de Windows: ${line.slice(6)}`);

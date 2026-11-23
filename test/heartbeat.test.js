@@ -7,7 +7,7 @@ const { createClient } = require('../src/client');
 const { createPower } = require('../src/mac-power');
 const { jsonChannel } = require('../src/lines');
 
-const CONFIG = { password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1, invertScroll: false, modifiers: {}, serverHost: '127.0.0.1' };
+const CONFIG = { password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1, invertScroll: false, edgeGraceMs: 0, modifiers: {}, serverHost: '127.0.0.1' };
 const quiet = () => {};
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -124,4 +124,22 @@ test('caffeinate: uno solo mientras esta conectada, se suelta al desconectar y d
   assert.deepStrictEqual(runs[1].args, ['-u', '-t', '2']);
   createPower({ keepAwake: false, run }).hold();
   assert.strictEqual(runs.length, 2);
+});
+
+test('la Mac sigue despierta aunque la Windows se apague, para poder reconectarse sola', async () => {
+  const calls = [];
+  const power = { hold: () => calls.push('hold'), release: () => calls.push('release'), wakeDisplay: () => {} };
+  const win = fakeHelper();
+  const server = createServer({ ...CONFIG, port: 0 }, win, quiet, { heartbeatMs: 50, clientTimeoutMs: 200 });
+  const port = await server.listen(0, '127.0.0.1');
+  const mac = fakeHelper();
+  const client = createClient({ ...CONFIG, port }, mac, quiet, { power, retryMs: 50 });
+  mac.say('READY 100 100');
+  assert.deepStrictEqual(calls, ['hold']);          // despierta desde que arranca
+  await until(() => win.sent.includes('EDGE left'));
+  await server.close();                              // la Windows se apaga
+  await wait(300);
+  assert.ok(!calls.includes('release'), 'no debe soltar el "no dormir" al perder la conexion');
+  client.stop();
+  assert.strictEqual(calls.at(-1), 'release');
 });

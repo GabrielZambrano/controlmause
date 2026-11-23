@@ -27,7 +27,7 @@ const quiet = () => {};
 
 async function setup(extra = {}) {
   const config = { port: 0, password: 'secreto', macSide: 'left', mouseSpeed: 1, scrollSpeed: 1,
-    invertScroll: false, modifiers: {}, serverHost: '127.0.0.1', ...extra };
+    invertScroll: false, edgeGraceMs: 0, modifiers: {}, serverHost: '127.0.0.1', ...extra };
   const win = fakeHelper();
   const mac = fakeHelper();
   const server = createServer(config, win, quiet);
@@ -117,5 +117,15 @@ test('con la Mac arriba se avisa el borde de arriba y se vuelve bajando', async 
   win.say('M 0 200');
   await waitFor(win, /^RELEASE 0\.5000$/);
   client.stop();
+  await server.close();
+});
+
+test('si Windows desactiva la deteccion del raton y se reactiva, se anota en el registro', async () => {
+  const win = fakeHelper();
+  const logs = [];
+  const server = createServer({ port: 0, password: 'x', macSide: 'top', mouseSpeed: 1, scrollSpeed: 1, modifiers: {} }, win, (m) => logs.push(m));
+  await server.listen(0, '127.0.0.1');
+  win.say('REHOOKED');
+  assert.ok(logs.some((l) => l.includes('se volvio a activar sola')));
   await server.close();
 });
